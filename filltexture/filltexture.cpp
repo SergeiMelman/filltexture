@@ -229,17 +229,22 @@ fillTextureRBF(const S3DLArray<S3DLVector2> & TextureCoordinates,
     rbfsetpoints(model, points);
     rbfbuildmodel(model, rep);
 
-// заполнить текстуру
-// time: real    4m46.437s; user    4m46.394s
-// #pragma omp for schedule(guided) // time: real    1m5.991s;  user    12m40.951s
+    // заполнить текстуру
+    const int n = omp_get_max_threads();
+    vector<alglib::rbfmodel> modelv(n, model);
+
+// NON OMP time: real    4m46.437s; user    4m46.394s
+// OMP time:     real    0m29.320s; user    5m18.604s
+#pragma omp parallel for schedule(guided) shared(modelv, texture)
     for(int y = 0; y < height; ++y) {
-        alglib::rbfmodel model1 = model;
+        const int threadnum = omp_get_thread_num();
+        alglib::rbfmodel & modeln = modelv[threadnum];
+        alglib::real_1d_array p, f;
+        p.setlength(2);
         for(int x = 0; x < width; ++x) {
-            alglib::real_1d_array p, f;
-            p.setlength(2);
             p[0] = x;
             p[1] = y;
-            rbfcalc(model, p, f);
+            rbfcalc(modeln, p, f);
             const S3DLRGB c(
                 clamp(f[0], 0.0, 255.0), clamp(f[1], 0.0, 255.0), clamp(f[2], 0.0, 255.0));
 

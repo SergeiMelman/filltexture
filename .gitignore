@@ -32,5 +32,7 @@
 *.app
 
 *.zip
+*.bmp
 
 install
+filltexture/filltexture
