@@ -2,21 +2,19 @@
 
 #include <math.h>
 #include "S3DL/S3DLVector3.h"
-#include "S3DL/S3DLMesh.h"
-#include "S3DL/S3DLColors.h"
+#include "S3DL/S3DLArray.h"
+// #include "S3DL/S3DLMesh.h"
+// #include "S3DL/S3DLColors.h"
+#include "S3DL/S3DLColorPicture.h"
 
-// по набору точек TextureCoordinates и Colors в этих точках
-// строит текстуру заполняя промежутки между точками
-// используется триангуляция Делоне и билинейная заливка треугольников
-void fillTexture(
-	const S3DLArray<S3DLVector2>& TextureCoordinates,
-	const S3DLArray<S3DLVector3>& Colors,
-	const int width, const int height,
-	S3DLColorPicture& texture); 
+// РїРѕ РЅР°Р±РѕСЂСѓ С‚РѕС‡РµРє TextureCoordinates Рё Colors РІ СЌС‚РёС… С‚РѕС‡РєР°С…
+// СЃС‚СЂРѕРёС‚ С‚РµРєСЃС‚СѓСЂСѓ Р·Р°РїРѕР»РЅСЏСЏ РїСЂРѕРјРµР¶СѓС‚РєРё РјРµР¶РґСѓ С‚РѕС‡РєР°РјРё
+// РёСЃРїРѕР»СЊР·СѓРµС‚СЃСЏ С‚СЂРёР°РЅРіСѓР»СЏС†РёСЏ Р”РµР»РѕРЅРµ Рё Р±РёР»РёРЅРµР№РЅР°СЏ Р·Р°Р»РёРІРєР° С‚СЂРµСѓРіРѕР»СЊРЅРёРєРѕРІ
+void fillTexture(const S3DLArray<S3DLVector2> & TextureCoordinates,
+    const S3DLArray<S3DLVector3> & Colors, const int width, const int height,
+    S3DLColorPicture & texture);
 
-// тоже самое, только применяется восполение RBF
-void fillTextureRBF(
-	const S3DLArray<S3DLVector2>& TextureCoordinates,
-	const S3DLArray<S3DLVector3>& Colors,
-	const int width, const int height,
-	S3DLColorPicture& texture); 
+// С‚РѕР¶Рµ СЃР°РјРѕРµ, С‚РѕР»СЊРєРѕ РїСЂРёРјРµРЅСЏРµС‚СЃСЏ РІРѕСЃРїРѕР»РµРЅРёРµ RBF
+void fillTextureRBF(const S3DLArray<S3DLVector2> & TextureCoordinates,
+    const S3DLArray<S3DLVector3> & Colors, const int width, const int height,
+    S3DLColorPicture & texture);

@@ -1,37 +1,46 @@
-#include "stdafx.h"
+#include <time.h>
+#include <string>
+
 #include "filltexture.h"
 
-int main()
+using namespace std;
+
+// РґР»СЏ РІСЃСЏС‡РµСЃРєРёС… С‚РµСЃС‚РѕРІ
+// for various tests
+int
+main()
 {
-	// для всяческих тестов
-	int const coordsSize = 400; // к-во точек
-	int const width = 2048; // размер будущей текстуры
-	int const height = 2048;
+    // number of points
+    int const coordsSize = 400; // Рє-РІРѕ С‚РѕС‡РµРє
+    // size of future texture
+    int const width = 2048; // СЂР°Р·РјРµСЂ Р±СѓРґСѓС‰РµР№ С‚РµРєСЃС‚СѓСЂС‹
+    int const height = 2048;
 
-	S3DLArray<S3DLVector2> TextureCoordinates; // размер
-	TextureCoordinates.resize(coordsSize);
-	
-	S3DLArray<S3DLVector3> Colors;
-	Colors.resize(coordsSize);
+    S3DLArray<S3DLVector2> TextureCoordinates; // СЂР°Р·РјРµСЂ
+    TextureCoordinates.resize(coordsSize);
 
-	for(int i = 0; i < coordsSize; ++i)
-	{
-		TextureCoordinates[i].x = (float)(rand() - 10) / RAND_MAX; // нельзя генерировать точку на краю
-		TextureCoordinates[i].y = (float)(rand() - 10) / RAND_MAX;
-		Colors[i].r = (float)rand() / RAND_MAX;
-		Colors[i].g = (float)rand() / RAND_MAX;
-		Colors[i].b = (float)rand() / RAND_MAX;
-	}
+    S3DLArray<S3DLVector3> Colors;
+    Colors.resize(coordsSize);
 
-	S3DLColorPicture texture;
-	fillTexture(TextureCoordinates, Colors, width, height, texture);
-	texture.Save("texture.bmp");
+    srand((unsigned)time(NULL));
+    for(int i = 0; i < coordsSize; ++i) {
+        // РЅРµР»СЊР·СЏ РіРµРЅРµСЂРёСЂРѕРІР°С‚СЊ С‚РѕС‡РєСѓ РЅР° РєСЂР°СЋ
+        // can't generate a point on the edge.
+        TextureCoordinates[i].x = (float)(rand() - 10) / RAND_MAX;
+        TextureCoordinates[i].y = (float)(rand() - 10) / RAND_MAX;
+        Colors[i].r = (float)rand() / RAND_MAX;
+        Colors[i].g = (float)rand() / RAND_MAX;
+        Colors[i].b = (float)rand() / RAND_MAX;
+    }
 
+    string suf = to_string(rand());
+    S3DLColorPicture texture;
+    fillTexture(TextureCoordinates, Colors, width, height, texture);
+    texture.Save(("texture" + suf + ".bmp").c_str());
 
-	//дюже долго... а жаль - красиво
-// 	fillTextureRBF(TextureCoordinates, Colors, width, height, texture);
-// 	texture.Save("textureRBF.bmp");
-
-	return 0;
+    // РґСЋР¶Рµ РґРѕР»РіРѕ... Р° Р¶Р°Р»СЊ - РєСЂР°СЃРёРІРѕ
+    // very long... but it's a pity - it's beautiful
+    fillTextureRBF(TextureCoordinates, Colors, width, height, texture);
+    texture.Save(("textureRBF" + suf + ".bmp").c_str());
+    return 0;
 }
-

@@ -1,248 +1,249 @@
-#include "stdafx.h"
-
 #include <omp.h>
+#include <algorithm>
 
-#include "filltexture.h"
+// Alglib
+#include "interpolation.h"
 
-//- Alkud start
-
-#define fixed int
-
-inline
-S3DLVector3 Dec2Bar(S3DLVector2 p1, S3DLVector2 p2, S3DLVector2 p3, S3DLVector2 p)
-{
-	float k1 = ((p2.y - p3.y)*(p.x - p3.x) + (p3.x - p2.x)*(p.y - p3.y)) / ((p2.y - p3.y)*(p1.x - p3.x) + (p3.x - p2.x)*(p1.y - p3.y));
-	float k2 = ((p3.y - p1.y)*(p.x - p3.x) + (p1.x - p3.x)*(p.y - p3.y)) / ((p2.y - p3.y)*(p1.x - p3.x) + (p3.x - p2.x)*(p1.y - p3.y));
-	float k3 = 1 - k1 - k2;
-	return S3DLVector3(k1, k2, k3);
-}
-
-inline
-void swap(int &a, int &b)
-{
-	int t;
-	t = a;
-	a = b;
-	b = t;
-}
-inline 
-fixed int_to_fixed(int value)
-{
-	return (value << 16);
-}
-inline
-int fixed_to_int(fixed value)
-{
-	return (value < 0) ? ((value >> 16) - 1) : (value >> 16);
-}
-
-void fillTreangle(const S3DLArray<S3DLVector2>& TextureCoordinates, const S3DLArray<S3DLVector3>& Colors, int i0, int i1, int i2, S3DLColorPicture& texture)
-
-{
-	if(TextureCoordinates[i1].y < TextureCoordinates[i0].y)
-	{
-		swap(i0, i1);
-	} // точки p1, p2 упорядочены
-	if(TextureCoordinates[i2].y < TextureCoordinates[i0].y)
-	{
-		swap(i0, i2);
-	} // точки p1, p3 упорядочены
-	if(TextureCoordinates[i1].y > TextureCoordinates[i2].y)
-	{
-		swap(i1, i2);
-	}
-	
-	const S3DLVector2 p[3] = {S3DLVector2(TextureCoordinates[i0].x * texture.width(), TextureCoordinates[i0].y * texture.height()), S3DLVector2(TextureCoordinates[i1].x * texture.width(), TextureCoordinates[i1].y * texture.height()), S3DLVector2(TextureCoordinates[i2].x * texture.width(), TextureCoordinates[i2].y * texture.height())};
-
-	const int x0 = p[0].x;
-	const int x1 = p[1].x;
-	const int x2 = p[2].x;
-
-	const int y0 = p[0].y;
-	const int y1 = p[1].y;
-	const int y2 = p[2].y;
-
-	// приращения по оси x для трёх сторон
-	// треугольника
-	// вычисляем приращения
-	// в случае, если ординаты двух точек
-	// совпадают, приращения
-	// полагаются равными нулю
-	fixed dx13 = (y2 != y0) ? int_to_fixed(x2 - x0) / (y2 - y0) : 0;
-	fixed dx12 = (y1 != y0) ? int_to_fixed(x1 - x0) / (y1 - y0) : 0;
-	fixed dx23 = (y2 != y1) ? int_to_fixed(x2 - x1) / (y2 - y1) : 0;
-
-	// "рабочие точки"
-	// изначально они находятся в верхней точке
-	fixed wx1 = int_to_fixed(x0);
-	fixed wx2 = wx1;
-
-	// сохраняем приращение dx13 в другой переменной
-	int _dx13 = dx13;
-
-	// упорядочиваем приращения таким образом, чтобы
-	// в процессе работы алгоритмы
-	// точка wx1 была всегда левее wx2
-	if(dx13 > dx12)
-	{
-		swap(dx13, dx12);
-	}
-
-	// растеризуем верхний полутреугольник
-	for(int i = y0; i < y1; i++)
-	{
-		// рисуем горизонтальную линию между рабочими точками
-		for(int j = fixed_to_int(wx1); j <= fixed_to_int(wx2); j++)
-		{
-			S3DLVector3 baric = Dec2Bar(p[0], p[1], p[2], S3DLVector2(j, i));
-			S3DLVector3 color = (Colors[i0] * baric.x + Colors[i1] * baric.y + Colors[i2] * baric.z) * 255.0f;
-			texture.SetAt(j, i, S3DLRGB((unsigned char)color.x, (unsigned char)color.y, (unsigned char)color.z));
-		}
-		wx1 += dx13;
-		wx2 += dx12;
-	}
-
-	// вырожденный случай, когда верхнего полутреугольника нет
-	// надо разнести рабочие точки по оси x,
-	// т.к. изначально они совпадают
-	if(y0 == y1)
-	{
-		wx1 = int_to_fixed(min(x0, x1));
-		wx2 = int_to_fixed(max(x0, x1));
-	}
-
-	// упорядочиваем приращения
-	// (используем сохраненное приращение)
-	if(_dx13 < dx23)
-	{
-		swap(_dx13, dx23);
-	}
-
-	// растеризуем нижний полутреугольник
-	for(int i = y1; i <= y2; i++)
-	{
-		// рисуем горизонтальную линию между рабочими точками
-		for(int j = fixed_to_int(wx1); j <= fixed_to_int(wx2); j++)
-		{
-			S3DLVector3 baric = Dec2Bar(p[0], p[1], p[2], S3DLVector2(j, i));
-			S3DLVector3 color = (Colors[i0] * baric.x + Colors[i1] * baric.y + Colors[i2] * baric.z) * 255.0f;
-			texture.SetAt(j, i, S3DLRGB((unsigned char)color.x, (unsigned char)color.y, (unsigned char)color.z));
-		}
-		wx1 += _dx13;
-		wx2 += dx23;
-	}
-}
-
-//- Alkud end
-
-
-
-
+// QHull
 #include "libqhullcpp/Qhull.h"
 #include "libqhullcpp/QhullPoints.h"
 #include "libqhullcpp/QhullFacetList.h"
 #include "libqhullcpp/QhullVertexSet.h"
-void fillTexture(const S3DLArray<S3DLVector2>& TextureCoordinates, const S3DLArray<S3DLVector3>& Colors, const int width, const int height, S3DLColorPicture & texture)
+
+#include "filltexture.h"
+
+typedef int fixedFloat;
+
+using namespace std;
+
+// Calculate baricentric coordinates of point p in triangle p1, p2, p3
+inline S3DLVector3
+Dec2Bar(S3DLVector2 p1, S3DLVector2 p2, S3DLVector2 p3, S3DLVector2 p)
 {
-	// не знаю зачем но нужно
-	QHULL_LIB_CHECK
-
-	// подготовить texture !!!
-	texture.resize(width, height);
-	
-	// преобразовать foat в double
-	const int sz = TextureCoordinates.size();
-	std::vector<double> texc(sz * 2);
-	for(int i = 0; i < sz; ++i)
-	{
-		texc[2 * i + 0] = TextureCoordinates[i].x;
-		texc[2 * i + 1] = TextureCoordinates[i].y;
-	}
-
-	//треангулировать
-	orgQhull::Qhull qhull("", 2, sz, texc.data(), "d Qt");
-	
-	//запустить заливку всех треугольников
-
-// 	// с параллелизмой
-// 	std::vector<orgQhull::QhullFacet> fs = qhull.facetList().toStdVector();
-// 	const int szf = fs.size();
-// #pragma omp parallel for schedule(guided)
-// 	for(int i = 0; i < szf; ++i)
-// 	{
-// 		const orgQhull::QhullFacet &f = fs[i];
-// 		if(!f.isGood()) continue;
-// 		const orgQhull::QhullVertexSet &v = f.vertices();
-// 		fillTreangle(TextureCoordinates, Colors, v[0].point().id(), v[1].point().id(), v[2].point().id(), texture);
-// 	}
-
-	// без параллелизму, тоже очень быстро
-	//long long t = GetTickCount();
-	for(orgQhull::QhullFacet f = qhull.beginFacet(); f != qhull.endFacet(); f = f.next())
-	{
-		if(!f.isGood()) continue;
-		const orgQhull::QhullVertexSet &v = f.vertices();
-		fillTreangle(TextureCoordinates, Colors, v[0].point().id(), v[1].point().id(), v[2].point().id(), texture);
-	}
-	//std::cout << GetTickCount() - t << "sec\n";
+    float k1 = ((p2.y - p3.y) * (p.x - p3.x) + (p3.x - p2.x) * (p.y - p3.y))
+        / ((p2.y - p3.y) * (p1.x - p3.x) + (p3.x - p2.x) * (p1.y - p3.y));
+    float k2 = ((p3.y - p1.y) * (p.x - p3.x) + (p1.x - p3.x) * (p.y - p3.y))
+        / ((p2.y - p3.y) * (p1.x - p3.x) + (p3.x - p2.x) * (p1.y - p3.y));
+    float k3 = 1 - k1 - k2;
+    return S3DLVector3(k1, k2, k3);
 }
 
-
-// наигравшись с RBF, можно сие грохнуть и весь Alglib тоже
-#include "alglib/src/interpolation.h"
-void fillTextureRBF(const S3DLArray<S3DLVector2>& TextureCoordinates, const S3DLArray<S3DLVector3>& Colors, const int width, const int height, S3DLColorPicture & texture)
+inline fixedFloat
+int_to_fixedFloat(int value)
 {
-	// подготовить texture !!!
-	texture.resize(width, height);
-	
-	// подготовить RBF
-	alglib::rbfmodel model;
-	alglib::rbfreport rep;
+    return (value << 16);
+}
+inline int
+fixedFloat_to_int(fixedFloat value)
+{
+    return (value < 0) ? ((value >> 16) - 1) : (value >> 16);
+}
 
-	rbfcreate(2, 3, model);
+void
+fillTreangle(const S3DLArray<S3DLVector2> & TextureCoordinates,
+    const S3DLArray<S3DLVector3> & Colors, int i0, int i1, int i2, S3DLColorPicture & texture)
 
-	// преобразовать 
-	const int sz = TextureCoordinates.size();
+{
+    // СЃРѕСЂС‚РёСЂСѓРµРј С‚РѕС‡РєРё РїРѕ РІРѕР·СЂР°СЃС‚Р°РЅРёСЋ
+    if(TextureCoordinates[i1].y < TextureCoordinates[i0].y) {
+        swap(i0, i1);
+    } // С‚РѕС‡РєРё p1, p2 СѓРїРѕСЂСЏРґРѕС‡РµРЅС‹
+    if(TextureCoordinates[i2].y < TextureCoordinates[i0].y) {
+        swap(i0, i2);
+    } // С‚РѕС‡РєРё p1, p3 СѓРїРѕСЂСЏРґРѕС‡РµРЅС‹
+    if(TextureCoordinates[i1].y > TextureCoordinates[i2].y) {
+        swap(i1, i2);
+    }
 
-	alglib::real_2d_array points;
-	points.setlength(sz, 5);
+    // РІС‹С‡РёСЃР»СЏРµРј РїСЂРёСЂР°С‰РµРЅРёСЏ
+    const S3DLVector2 p[3] = {//
+        S3DLVector2(TextureCoordinates[i0].x * texture.width(),
+            TextureCoordinates[i0].y * texture.height()),
+        S3DLVector2(TextureCoordinates[i1].x * texture.width(),
+            TextureCoordinates[i1].y * texture.height()),
+        S3DLVector2(TextureCoordinates[i2].x * texture.width(),
+            TextureCoordinates[i2].y * texture.height())};
 
-	for(int i = 0; i < sz; ++i)
-	{
-		points[i][0] = TextureCoordinates[i].x * width;
-		points[i][1] = TextureCoordinates[i].y * height;
+    const int x0 = p[0].x;
+    const int x1 = p[1].x;
+    const int x2 = p[2].x;
 
-		points[i][2] = Colors[i].r * 255;
-		points[i][3] = Colors[i].g * 255;
-		points[i][4] = Colors[i].b * 255;
-	}
+    const int y0 = p[0].y;
+    const int y1 = p[1].y;
+    const int y2 = p[2].y;
 
-	//построить модель RBF
-	double RBase = 500.0; // среднея дистанция между точками
-	int NLayers = 3;// log(2.0*RBase) / log(2.0) + 2; // хороша если разброс средних дистанций имеет малую дисперсию
-	rbfsetalgomultilayer(model, RBase, NLayers);
+    // РїСЂРёСЂР°С‰РµРЅРёСЏ РїРѕ РѕСЃРё x РґР»СЏ С‚СЂС‘С… СЃС‚РѕСЂРѕРЅ
+    // С‚СЂРµСѓРіРѕР»СЊРЅРёРєР°
+    // РІС‹С‡РёСЃР»СЏРµРј РїСЂРёСЂР°С‰РµРЅРёСЏ
+    // РІ СЃР»СѓС‡Р°Рµ, РµСЃР»Рё РѕСЂРґРёРЅР°С‚С‹ РґРІСѓС… С‚РѕС‡РµРє
+    // СЃРѕРІРїР°РґР°СЋС‚, РїСЂРёСЂР°С‰РµРЅРёСЏ
+    // РїРѕР»Р°РіР°СЋС‚СЃСЏ СЂР°РІРЅС‹РјРё РЅСѓР»СЋ
+    fixedFloat dx13 = (y2 != y0) ? int_to_fixedFloat(x2 - x0) / (y2 - y0) : 0;
+    fixedFloat dx12 = (y1 != y0) ? int_to_fixedFloat(x1 - x0) / (y1 - y0) : 0;
+    fixedFloat dx23 = (y2 != y1) ? int_to_fixedFloat(x2 - x1) / (y2 - y1) : 0;
 
-	rbfsetpoints(model, points);
-	rbfbuildmodel(model, rep);
+    // "СЂР°Р±РѕС‡РёРµ С‚РѕС‡РєРё"
+    // РёР·РЅР°С‡Р°Р»СЊРЅРѕ РѕРЅРё РЅР°С…РѕРґСЏС‚СЃСЏ РІ РІРµСЂС…РЅРµР№ С‚РѕС‡РєРµ
+    fixedFloat wx1 = int_to_fixedFloat(x0);
+    fixedFloat wx2 = wx1;
 
-	// заполнить текстуру
-#pragma omp parallel for schedule(guided)
-	for(int y = 0; y < height; ++y)
-	{
-		alglib::rbfmodel model1 = model;
-		for(int x = 0; x < width; ++x)
-		{
-			alglib::real_1d_array p, f;
-			p.setlength(2);
-			p[0] = x;
-			p[1] = y;
-			rbfcalc(model1, p, f);
-			S3DLRGB c;
-			c.r = f[0] < 0 ? 0 : (f[0] > 255 ? 255 : f[0]);
-			c.g = f[1] < 0 ? 0 : (f[1] > 255 ? 255 : f[1]);
-			c.b = f[2] < 0 ? 0 : (f[2] > 255 ? 255 : f[2]);
-			
-			texture.SetAt(x, y, c);
-		}
-	}
+    // СЃРѕС…СЂР°РЅСЏРµРј РїСЂРёСЂР°С‰РµРЅРёРµ dx13 РІ РґСЂСѓРіРѕР№ РїРµСЂРµРјРµРЅРЅРѕР№
+    int _dx13 = dx13;
+
+    // СѓРїРѕСЂСЏРґРѕС‡РёРІР°РµРј РїСЂРёСЂР°С‰РµРЅРёСЏ С‚Р°РєРёРј РѕР±СЂР°Р·РѕРј, С‡С‚РѕР±С‹
+    // РІ РїСЂРѕС†РµСЃСЃРµ СЂР°Р±РѕС‚С‹ Р°Р»РіРѕСЂРёС‚РјС‹
+    // С‚РѕС‡РєР° wx1 Р±С‹Р»Р° РІСЃРµРіРґР° Р»РµРІРµРµ wx2
+    if(dx13 > dx12) {
+        swap(dx13, dx12);
+    }
+
+    // СЂР°СЃС‚РµСЂРёР·СѓРµРј РІРµСЂС…РЅРёР№ РїРѕР»СѓС‚СЂРµСѓРіРѕР»СЊРЅРёРє
+    for(int i = y0; i < y1; i++) {
+        // СЂРёСЃСѓРµРј РіРѕСЂРёР·РѕРЅС‚Р°Р»СЊРЅСѓСЋ Р»РёРЅРёСЋ РјРµР¶РґСѓ СЂР°Р±РѕС‡РёРјРё С‚РѕС‡РєР°РјРё
+        for(int j = fixedFloat_to_int(wx1); j <= fixedFloat_to_int(wx2); j++) {
+            S3DLVector3 baric = Dec2Bar(p[0], p[1], p[2], S3DLVector2(float(j), float(i)));
+            S3DLVector3 color
+                = (Colors[i0] * baric.x + Colors[i1] * baric.y + Colors[i2] * baric.z) * 255.0f;
+            texture.SetAt(j, i,
+                S3DLRGB((unsigned char)color.x, (unsigned char)color.y, (unsigned char)color.z));
+        }
+        wx1 += dx13;
+        wx2 += dx12;
+    }
+
+    // РІС‹СЂРѕР¶РґРµРЅРЅС‹Р№ СЃР»СѓС‡Р°Р№, РєРѕРіРґР° РІРµСЂС…РЅРµРіРѕ РїРѕР»СѓС‚СЂРµСѓРіРѕР»СЊРЅРёРєР° РЅРµС‚
+    // РЅР°РґРѕ СЂР°Р·РЅРµСЃС‚Рё СЂР°Р±РѕС‡РёРµ С‚РѕС‡РєРё РїРѕ РѕСЃРё x,
+    // С‚.Рє. РёР·РЅР°С‡Р°Р»СЊРЅРѕ РѕРЅРё СЃРѕРІРїР°РґР°СЋС‚
+    if(y0 == y1) {
+        wx1 = int_to_fixedFloat(min(x0, x1));
+        wx2 = int_to_fixedFloat(max(x0, x1));
+    }
+
+    // СѓРїРѕСЂСЏРґРѕС‡РёРІР°РµРј РїСЂРёСЂР°С‰РµРЅРёСЏ
+    // (РёСЃРїРѕР»СЊР·СѓРµРј СЃРѕС…СЂР°РЅРµРЅРЅРѕРµ РїСЂРёСЂР°С‰РµРЅРёРµ)
+    if(_dx13 < dx23) {
+        swap(_dx13, dx23);
+    }
+
+    // СЂР°СЃС‚РµСЂРёР·СѓРµРј РЅРёР¶РЅРёР№ РїРѕР»СѓС‚СЂРµСѓРіРѕР»СЊРЅРёРє
+    for(int i = y1; i <= y2; i++) {
+        // СЂРёСЃСѓРµРј РіРѕСЂРёР·РѕРЅС‚Р°Р»СЊРЅСѓСЋ Р»РёРЅРёСЋ РјРµР¶РґСѓ СЂР°Р±РѕС‡РёРјРё С‚РѕС‡РєР°РјРё
+        for(int j = fixedFloat_to_int(wx1); j <= fixedFloat_to_int(wx2); j++) {
+            S3DLVector3 baric = Dec2Bar(p[0], p[1], p[2], S3DLVector2(float(j), float(i)));
+            S3DLVector3 color
+                = (Colors[i0] * baric.x + Colors[i1] * baric.y + Colors[i2] * baric.z) * 255.0f;
+            texture.SetAt(j, i,
+                S3DLRGB((unsigned char)color.x, (unsigned char)color.y, (unsigned char)color.z));
+        }
+        wx1 += _dx13;
+        wx2 += dx23;
+    }
+}
+
+void
+fillTexture(const S3DLArray<S3DLVector2> & TextureCoordinates,
+    const S3DLArray<S3DLVector3> & Colors, const int width, const int height,
+    S3DLColorPicture & texture)
+{
+    // РЅРµ Р·РЅР°СЋ Р·Р°С‡РµРј РЅРѕ РЅСѓР¶РЅРѕ
+    QHULL_LIB_CHECK
+
+    // РїРѕРґРіРѕС‚РѕРІРёС‚СЊ texture !!!
+    texture.resize(width, height);
+
+    // РїСЂРµРѕР±СЂР°Р·РѕРІР°С‚СЊ foat РІ double
+    const int sz = TextureCoordinates.size();
+    std::vector<double> texc(sz * 2);
+    for(int i = 0; i < sz; ++i) {
+        texc[2 * i + 0] = TextureCoordinates[i].x;
+        texc[2 * i + 1] = TextureCoordinates[i].y;
+    }
+
+    // С‚СЂРµР°РЅРіСѓР»РёСЂРѕРІР°С‚СЊ
+    orgQhull::Qhull qhull("", 2, sz, texc.data(), "d Qt");
+
+    // Р·Р°РїСѓСЃС‚РёС‚СЊ Р·Р°Р»РёРІРєСѓ РІСЃРµС… С‚СЂРµСѓРіРѕР»СЊРЅРёРєРѕРІ
+
+    // 	// СЃ РїР°СЂР°Р»Р»РµР»РёР·РјРѕР№
+    // 	std::vector<orgQhull::QhullFacet> fs = qhull.facetList().toStdVector();
+    // 	const int szf = fs.size();
+    // #pragma omp parallel for schedule(guided)
+    // 	for(int i = 0; i < szf; ++i)
+    // 	{
+    // 		const orgQhull::QhullFacet &f = fs[i];
+    // 		if(!f.isGood()) continue;
+    // 		const orgQhull::QhullVertexSet &v = f.vertices();
+    // 		fillTreangle(TextureCoordinates, Colors, v[0].point().id(), v[1].point().id(),
+    // v[2].point().id(), texture);
+    // 	}
+
+    // Р±РµР· РїР°СЂР°Р»Р»РµР»РёР·РјСѓ, С‚РѕР¶Рµ РѕС‡РµРЅСЊ Р±С‹СЃС‚СЂРѕ
+    // long long t = GetTickCount();
+    for(orgQhull::QhullFacet f = qhull.beginFacet(); f != qhull.endFacet(); f = f.next()) {
+        if(!f.isGood())
+            continue;
+        const orgQhull::QhullVertexSet & v = f.vertices();
+        fillTreangle(TextureCoordinates, Colors, v[0].point().id(), v[1].point().id(),
+            v[2].point().id(), texture);
+    }
+    // std::cout << GetTickCount() - t << "sec\n";
+}
+
+// РЅР°РёРіСЂР°РІС€РёСЃСЊ СЃ RBF, РјРѕР¶РЅРѕ СЃРёРµ РіСЂРѕС…РЅСѓС‚СЊ Рё РІРµСЃСЊ Alglib С‚РѕР¶Рµ
+void
+fillTextureRBF(const S3DLArray<S3DLVector2> & TextureCoordinates,
+    const S3DLArray<S3DLVector3> & Colors, const int width, const int height,
+    S3DLColorPicture & texture)
+{
+    // prepare texture !!!
+    texture.resize(width, height);
+
+    // prepare RBF
+    alglib::rbfmodel model;
+    alglib::rbfreport rep;
+
+    rbfcreate(2, 3, model);
+
+    const int sz = TextureCoordinates.size();
+
+    alglib::real_2d_array points;
+    points.setlength(sz, 5);
+
+    // convert into alglib format
+    for(int i = 0; i < sz; ++i) {
+        points[i][0] = TextureCoordinates[i].x * width;
+        points[i][1] = TextureCoordinates[i].y * height;
+
+        points[i][2] = Colors[i].r * 255.0f;
+        points[i][3] = Colors[i].g * 255.0f;
+        points[i][4] = Colors[i].b * 255.0f;
+    }
+
+    // build RBF model
+    // average distance between points
+    double RBase = 500.0;
+    // log(2.0*RBase) / log(2.0) + 2; // С…РѕСЂРѕС€Р° РµСЃР»Рё СЂР°Р·Р±СЂРѕСЃ СЃСЂРµРґРЅРёС… РґРёСЃС‚Р°РЅС†РёР№ РёРјРµРµС‚ РјР°Р»СѓСЋ РґРёСЃРїРµСЂСЃРёСЋ
+    int NLayers = 3;
+    rbfsetalgomultilayer(model, RBase, NLayers);
+
+    rbfsetpoints(model, points);
+    rbfbuildmodel(model, rep);
+
+// Р·Р°РїРѕР»РЅРёС‚СЊ С‚РµРєСЃС‚СѓСЂСѓ
+// time: real    4m46.437s; user    4m46.394s
+// #pragma omp for schedule(guided) // time: real    1m5.991s;  user    12m40.951s
+    for(int y = 0; y < height; ++y) {
+        alglib::rbfmodel model1 = model;
+        for(int x = 0; x < width; ++x) {
+            alglib::real_1d_array p, f;
+            p.setlength(2);
+            p[0] = x;
+            p[1] = y;
+            rbfcalc(model, p, f);
+            const S3DLRGB c(
+                clamp(f[0], 0.0, 255.0), clamp(f[1], 0.0, 255.0), clamp(f[2], 0.0, 255.0));
+
+            texture.SetAt(x, y, c);
+        }
+    }
 }
