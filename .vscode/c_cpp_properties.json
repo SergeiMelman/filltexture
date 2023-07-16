@@ -2,7 +2,11 @@
   "configurations": [
     {
       "name": "Linux",
-      "includePath": ["${workspaceFolder}/**"],
+      "includePath": [
+        "${workspaceFolder}/**",
+        "${workspaceFolder}/alglib/src",
+        "${workspaceFolder}/qhull/install/include"
+      ],
       "defines": [],
       "compilerPath": "/usr/bin/gcc",
       "intelliSenseMode": "linux-gcc-x64"

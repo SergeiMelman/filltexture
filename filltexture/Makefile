@@ -6,7 +6,7 @@ CPPINCLUDES = \
 	-I../alglib/src \
 
 LDFLAGS = \
-	-L../qhull/lib \
+	-L../qhull/install/lib \
 	-L../alglib/build \
 
 LDLIBS = \
@@ -34,4 +34,6 @@ $(EXECUTABLE): $(OBJECTS)
 clean:
 	rm -f $(OBJECTS) $(EXECUTABLE)
 
+cleano:
+	rm -f $(OBJECTS)
 
