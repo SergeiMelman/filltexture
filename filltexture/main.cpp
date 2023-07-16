@@ -11,7 +11,7 @@ int
 main()
 {
     // number of points
-    int const coordsSize = 400; // к-во точек
+    int const coordsSize = 40; // к-во точек
     // size of future texture
     int const width = 2048; // размер будущей текстуры
     int const height = 2048;
